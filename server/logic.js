@@ -52,6 +52,10 @@ export function cleanTitle(raw) {
     // ObjectName field — e.g. "Mona Lisa, Mona Lisa", "Baptism of Christ,
     // Baptism of Christ". Only exact-split duplicates, not the title itself.
     .replace(/^([^,;\/]{4,80})\s*[,;]\s*\1$/g, "$1")
+    // Collapse whitespace-separated duplicate phrases — ObjectName can
+    // contain two language variants of the same title back-to-back (e.g.
+    // "Mona Lisa   Mona Lisa" from German: div + en div).
+    .replace(/\b([A-Za-zÀ-ÿ][\w'’\- ]{3,79})\s{2,}\1\b/g, "$1")
     .replace(/\s*(label|date|description|title|depicts|instance|part|series)\s*QS:[\s\S]*$/i, "")
     .replace(/\s*[Aa]lternative (?:title|label)s?\s*\(?s?\)?:\s*[\s\S]*$/i, "")
     .replace(/\s*-\s*Google Art Project.*$/i, "")
@@ -319,8 +323,9 @@ export async function batchImageInfo(titles) {
 }
 
 export async function fetchPaintings(name, max = 28) {
-  // v5: collapse X, X duplicates in cleanTitle (e.g. "Mona Lisa, Mona Lisa")
-  const key = `paintings:v5:${name}`;
+  // v6: also collapse whitespace-separated duplicate phrases
+  // (Mona Lisa's ObjectName has German: + en: variants back-to-back).
+  const key = `paintings:v6:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
