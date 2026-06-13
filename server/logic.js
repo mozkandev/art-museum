@@ -301,7 +301,8 @@ export async function batchImageInfo(titles) {
 }
 
 export async function fetchPaintings(name, max = 28) {
-  const key = `paintings:${name}`;
+  // v2: include priority-boost logic; bump to invalidate old caches.
+  const key = `paintings:v2:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
