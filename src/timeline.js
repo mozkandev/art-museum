@@ -5,8 +5,8 @@
 import { gsap } from "gsap";
 import { PERIODS, TIMELINE_MIN_YEAR, TIMELINE_MAX_YEAR } from "./data/periods.js";
 
-const PX_PER_YEAR = 4.2;
-const CARD_MIN = 260;
+const PX_PER_YEAR = 3.2;
+const CARD_MIN = 220;
 const CARD_PAD = 24;
 const TICK_EVERY = 50;
 const TICK_LABEL_EVERY = 100;
@@ -80,7 +80,10 @@ export class Timeline {
     const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
     const x = yearToX(p.start);
     const side = i % 2 === 0 ? -1 : 1;
-    const y = side === -1 ? -CARD_H - 40 : 40;
+    // Always anchor cards BELOW the axis (positive Y in world space, so
+    // they sit in the lower half of the viewport). Cards used to be split
+    // above/below which made the upper half look empty and crowded the top.
+    const y = 60;
 
     const card = document.createElement("article");
     card.className = "tl-card";
@@ -248,7 +251,10 @@ export class Timeline {
     const s = clamp(Math.min(scaleX, 1), 0.35, 1);
     this.target.s = s;
     this.target.x = (w - totalW * s) / 2;
-    this.target.y = -h / 2; // center axis vertically
+    // Position the axis ~38% from the top of the viewport so cards (which
+    // hang below) sit in the lower 60% and the upper portion of the
+    // screen is breathable negative space.
+    this.target.y = -h * 0.12;
     // Snap view to target so the first paint is already centered (no slide-in
     // from the 0,0 default, which is what made the timeline look "off").
     this.view.x = this.target.x;
