@@ -45,6 +45,13 @@ let timeline = null;
 function enterTimeline() {
   const screen = $("#timeline-screen");
   screen.classList.remove("hidden");
+  // Force layout so the newly-unhidden .screen has a real size before
+  // we construct Timeline. Without this, the viewport's clientWidth can
+  // still read 0 in the same frame (display:none → display:block is
+  // logically applied but layout hasn't been computed), which makes
+  // _fit() bail and the world stays pinned to (0,0).
+  void screen.offsetHeight;
+  void $("#timeline-viewport").offsetHeight;
   if (!timeline) {
     timeline = new Timeline({
       viewport: $("#timeline-viewport"),
@@ -52,16 +59,12 @@ function enterTimeline() {
       yearReadout: $("#year-readout"),
       onArtistClick: openPlacard,
     });
-    // _fit() inside the constructor can read clientWidth=0 because layout
-    // for the newly-unhidden screen hasn't been computed yet. Re-fit on the
-    // next frame so the world lands centered instead of pinned to (0,0).
-    requestAnimationFrame(() => {
-      timeline._fit();
-      // Also refit on the following frame in case fonts/layout reflow.
-      requestAnimationFrame(() => timeline._fit());
-    });
     timeline.start();
     timeline.reveal();
+  } else {
+    // Already constructed (returning from gallery). Re-fit because the
+    // viewport was display:none while we were in the gallery.
+    timeline._fit();
   }
 }
 
