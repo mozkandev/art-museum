@@ -218,6 +218,7 @@ export async function gatherCandidates(name) {
   }
 
   const seen = new Set();
+  const ordered = [];
   // Boost search hits whose filename strongly references the artist name —
   // these are typically the canonical / most-famous works that the article
   // and category sources missed. We insert them between article images and
