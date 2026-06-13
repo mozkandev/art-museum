@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="theme-color" content="#0c0b09" />
+    <title>MUSÉE — An Interactive History of Art</title>
+    <meta
+      name="description"
+      content="A cinematic, museum-grade experience: travel through a timeline of art history and step into first-person 3D galleries of the great masters."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <!-- INTRO -->
+    <section id="intro" class="screen intro">
+      <div class="intro__inner">
+        <div class="rule rule--gold"></div>
+        <div class="intro__eyebrow">An interactive history of art</div>
+        <h1 class="intro__title">MUS<span class="elig">É</span>E</h1>
+        <div class="intro__subtitle">1150 — 1990 · A walk through the masters</div>
+        <div class="rule rule--gold"></div>
+        <button id="begin-btn" class="btn btn--gold" type="button">Begin</button>
+        <div class="intro__hint">scroll to zoom · drag to pan · click a name to enter the gallery</div>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section id="timeline-screen" class="screen timeline hidden">
+      <header class="timeline__header">
+        <div class="brand">
+          <span class="brand__mark">M·</span><span class="brand__name">Mus<span class="elig">é</span>e</span>
+        </div>
+        <div class="timeline__tip">scroll to zoom · drag to pan</div>
+        <div id="year-readout" class="year-readout">—</div>
+      </header>
+      <div id="timeline-viewport" class="timeline__viewport">
+        <div id="timeline-world" class="timeline__world"></div>
+      </div>
+    </section>
+
+    <!-- PLACARD -->
+    <div id="placard-backdrop" class="placard-backdrop hidden" aria-hidden="true">
+      <article id="placard" class="placard" role="dialog" aria-modal="true" aria-labelledby="placard-name">
+        <button id="placard-close" class="placard__close" aria-label="Close">×</button>
+        <div class="placard__pin" aria-hidden="true"></div>
+        <div id="placard-body" class="placard__body">
+          <div class="placard__loader">
+            <div class="placard__spinner"></div>
+            <div class="placard__loader-text">Consulting the archives…</div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <!-- GALLERY -->
+    <section id="gallery-screen" class="screen gallery hidden">
+      <div id="gallery-canvas" class="gallery__canvas"></div>
+      <div class="gallery__vignette" aria-hidden="true"></div>
+      <div id="gallery-loading" class="gallery__loading hidden">
+        <div class="gallery__spinner"></div>
+        <div class="gallery__loading-text">Hanging the paintings…</div>
+        <div id="gallery-loading-progress" class="gallery__loading-progress">0 / 0</div>
+      </div>
+      <div id="gallery-lock-overlay" class="lock-overlay hidden" aria-hidden="true">
+        <div class="lock-card">
+          <div class="lock-card__eyebrow">First-Person Gallery</div>
+          <h2 id="lock-card-title" class="lock-card__title">—</h2>
+          <div id="lock-card-sub" class="lock-card__sub">—</div>
+          <ul class="lock-card__legend">
+            <li><b>W A S D</b> &nbsp;move</li>
+            <li><b>Mouse</b> &nbsp;look around</li>
+            <li><b>Shift</b> &nbsp;sprint</li>
+            <li><b>Esc</b> &nbsp;release pointer</li>
+          </ul>
+          <div class="lock-card__actions">
+            <button id="lock-enter" class="btn btn--gold" type="button">Enter the gallery</button>
+            <button id="lock-back" class="btn btn--ghost" type="button">← Back to the timeline</button>
+          </div>
+        </div>
+      </div>
+      <div id="gallery-hud" class="gallery__hud hidden">
+        <span id="gallery-hud-artist">—</span>
+        <span class="dot"></span>
+        <span id="gallery-hud-count">—</span>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,255 @@
+// Timeline — DOM-based, GPU-transformed, infinite horizontal canvas.
+// Pan with drag, zoom with wheel anchored under the cursor. No
+// setPointerCapture (it would retarget clicks on the artist chips).
+
+import { gsap } from "gsap";
+import { PERIODS, TIMELINE_MIN_YEAR, TIMELINE_MAX_YEAR } from "./data/periods.js";
+
+const PX_PER_YEAR = 4.2;
+const CARD_MIN = 260;
+const CARD_PAD = 24;
+const TICK_EVERY = 50;
+const TICK_LABEL_EVERY = 100;
+const AXIS_Y = 0; // logical y of the axis in the world
+const CARD_H = 168;
+const REVEAL_SCALE = 0.8;
+const CLICK_THRESHOLD = 6;
+
+function yearToX(year) {
+  return (year - TIMELINE_MIN_YEAR) * PX_PER_YEAR;
+}
+
+export class Timeline {
+  constructor({ viewport, world, yearReadout, onArtistClick }) {
+    this.viewport = viewport;
+    this.world = world;
+    this.yearReadout = yearReadout;
+    this.onArtistClick = onArtistClick;
+
+    this.view = { x: 0, y: 0, s: 1 };
+    this.target = { x: 0, y: 0, s: 1 };
+
+    this._build();
+    this._bind();
+    this._fit();
+  }
+
+  // ── BUILD ────────────────────────────────────────────────────────────────
+  _build() {
+    this.world.innerHTML = "";
+
+    // Axis
+    this.axisEl = document.createElement("div");
+    this.axisEl.className = "tl-axis";
+    this.world.appendChild(this.axisEl);
+
+    // Ticks
+    const ticks = document.createElement("div");
+    ticks.className = "tl-ticks";
+    this.ticksEl = ticks;
+    this.axisEl.appendChild(ticks);
+    for (let y = TIMELINE_MIN_YEAR; y <= TIMELINE_MAX_YEAR; y += TICK_EVERY) {
+      const t = document.createElement("div");
+      t.className = "tl-tick";
+      if (y % TICK_LABEL_EVERY === 0) {
+        t.classList.add("tl-tick--label");
+        t.textContent = y;
+      }
+      t.style.left = `${yearToX(y)}px`;
+      ticks.appendChild(t);
+    }
+    // Axis rule
+    const rule = document.createElement("div");
+    rule.className = "tl-axis__rule";
+    this.axisEl.appendChild(rule);
+
+    // Period cards
+    this.cards = [];
+    PERIODS.forEach((p, i) => {
+      const card = this._buildCard(p, i);
+      this.world.appendChild(card);
+      this.cards.push({ el: card, period: p, side: i % 2 === 0 ? -1 : 1 });
+    });
+
+    // resize observer for re-fitting
+    this._ro = new ResizeObserver(() => this._fit());
+    this._ro.observe(this.viewport);
+  }
+
+  _buildCard(p, i) {
+    const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
+    const x = yearToX(p.start);
+    const side = i % 2 === 0 ? -1 : 1;
+    const y = side === -1 ? -CARD_H - 40 : 40;
+
+    const card = document.createElement("article");
+    card.className = "tl-card";
+    card.style.setProperty("--pc", p.color);
+    card.style.width = `${w}px`;
+    card.style.transform = `translate(${x}px, ${y}px)`;
+    card.dataset.periodId = p.id;
+
+    card.innerHTML = `
+      <button class="tl-card__head" data-period="${p.id}" type="button">
+        <div class="tl-card__years">${p.start}–${p.end}</div>
+        <h3 class="tl-card__name">${p.name}</h3>
+        <p class="tl-card__blurb">${p.blurb}</p>
+      </button>
+      <div class="tl-card__chips">
+        ${p.artists
+          .map(
+            (a) => `
+          <button class="tl-chip" data-artist="${escapeAttr(a)}" data-period="${p.id}" type="button">
+            <span class="tl-chip__dot" aria-hidden="true"></span>
+            <span class="tl-chip__name">${escapeHtml(a)}</span>
+          </button>`,
+          )
+          .join("")}
+      </div>
+    `;
+    return card;
+  }
+
+  // ── EVENTS ───────────────────────────────────────────────────────────────
+  _bind() {
+    let dragging = false;
+    let startX = 0, startY = 0, startViewX = 0, startViewY = 0;
+    let downX = 0, downY = 0, moved = 0;
+
+    this.viewport.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      // Don't start a pan on buttons / chips
+      if (e.target.closest("button")) return;
+      dragging = true;
+      downX = e.clientX;
+      downY = e.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
+      startViewX = this.target.x;
+      startViewY = this.target.y;
+      moved = 0;
+      this.viewport.setPointerCapture?.(e.pointerId);
+      this.viewport.style.cursor = "grabbing";
+    });
+
+    this.viewport.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      moved = Math.max(moved, Math.hypot(e.clientX - downX, e.clientY - downY));
+      this.target.x = startViewX + dx;
+      this.target.y = startViewY + dy;
+    });
+
+    const stop = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      this.viewport.style.cursor = "grab";
+      try { this.viewport.releasePointerCapture?.(e.pointerId); } catch {}
+    };
+    this.viewport.addEventListener("pointerup", stop);
+    this.viewport.addEventListener("pointercancel", stop);
+
+    this.viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const rect = this.viewport.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      // point under cursor in world coords (current)
+      const worldX = (mx - this.view.x) / this.view.s;
+      const worldY = (my - this.view.y) / this.view.s;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const newS = clamp(this.target.s * factor, 0.35, 7);
+      // keep that world point under the cursor
+      this.target.s = newS;
+      this.target.x = mx - worldX * newS;
+      this.target.y = my - worldY * newS;
+    }, { passive: false });
+
+    // Click delegation: artist chip → openPlacard
+    this.world.addEventListener("click", (e) => {
+      if (moved > CLICK_THRESHOLD) return; // it was a drag
+      const chip = e.target.closest(".tl-chip");
+      if (chip) {
+        e.stopPropagation();
+        const name = chip.dataset.artist;
+        const periodId = chip.dataset.period;
+        const period = PERIODS.find((p) => p.id === periodId);
+        this.onArtistClick?.(name, period);
+        return;
+      }
+      const head = e.target.closest(".tl-card__head");
+      if (head) {
+        const periodId = head.dataset.period;
+        const period = PERIODS.find((p) => p.id === periodId);
+        if (period) this.zoomToPeriod(period);
+      }
+    });
+  }
+
+  // ── TRANSFORM / TICK LOOP ────────────────────────────────────────────────
+  start() {
+    const tick = () => {
+      this.view.x += (this.target.x - this.view.x) * 0.18;
+      this.view.y += (this.target.y - this.view.y) * 0.18;
+      this.view.s += (this.target.s - this.view.s) * 0.18;
+      this.world.style.transform = `translate3d(${this.view.x}px, ${this.view.y + this.viewportH() / 2}px, 0) scale(${this.view.s})`;
+      this.world.classList.toggle("zoomed", this.view.s > REVEAL_SCALE);
+      this._updateReadout();
+      this._raf = requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(tick);
+  }
+
+  stop() {
+    cancelAnimationFrame(this._raf);
+  }
+
+  viewportH() { return this.viewport.clientHeight; }
+
+  _updateReadout() {
+    const cx = this.viewport.clientWidth / 2;
+    const worldX = (cx - this.view.x) / this.view.s;
+    const year = Math.round(TIMELINE_MIN_YEAR + worldX / PX_PER_YEAR);
+    if (this.yearReadout) this.yearReadout.textContent = String(year);
+  }
+
+  // ── PUBLIC ───────────────────────────────────────────────────────────────
+  reveal() {
+    const els = this.cards.map((c) => c.el);
+    gsap.fromTo(
+      els,
+      { opacity: 0, y: (i) => (i % 2 === 0 ? 30 : -30) },
+      { opacity: 1, y: 0, duration: 0.9, ease: "power3.out", stagger: 0.06 },
+    );
+    gsap.fromTo(this.axisEl, { opacity: 0 }, { opacity: 1, duration: 1.2, ease: "power2.out" });
+  }
+
+  _fit() {
+    const w = this.viewport.clientWidth;
+    const h = this.viewport.clientHeight;
+    const totalW = (TIMELINE_MAX_YEAR - TIMELINE_MIN_YEAR) * PX_PER_YEAR;
+    const scaleX = w / (totalW + 200);
+    const s = clamp(Math.min(scaleX, 1), 0.35, 1);
+    this.target.s = s;
+    this.target.x = (w - totalW * s) / 2;
+    this.target.y = -h / 2; // center axis vertically
+  }
+
+  zoomToPeriod(period) {
+    const w = this.viewport.clientWidth;
+    const cx = yearToX((period.start + period.end) / 2) * 1.2 + (period.end - period.start) * 0; // year center
+    const cw = (period.end - period.start) * PX_PER_YEAR;
+    const s = clamp(Math.min((w * 0.6) / cw, 3), 0.6, 3);
+    this.target.s = s;
+    this.target.x = w / 2 - cx * s;
+    this.target.y = -this.viewportH() / 2;
+  }
+}
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }

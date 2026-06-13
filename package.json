@@ -1,0 +1,20 @@
+{
+  "name": "musee",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.9.4",
+    "dotenv": "^16.4.5",
+    "gsap": "^3.12.5",
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
