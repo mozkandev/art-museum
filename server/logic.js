@@ -218,8 +218,23 @@ export async function gatherCandidates(name) {
   }
 
   const seen = new Set();
-  const ordered = [];
-  for (const t of [...wikiFiles, ...catFiles, ...searchFiles]) {
+  // Boost search hits whose filename strongly references the artist name —
+  // these are typically the canonical / most-famous works that the article
+  // and category sources missed. We insert them between article images and
+  // the bulk of the category results, not at the tail.
+  const lcName = name.toLowerCase();
+  const highSignalSearch = [];
+  const lowSignalSearch = [];
+  for (const t of searchFiles) {
+    const lcT = t.toLowerCase();
+    // Filename must contain a token of the artist name (e.g. "leonardo da vinci"
+    // or "monet" / "picasso") for it to count as a high-signal hit.
+    const tokens = lcName.split(/\s+/).filter((w) => w.length > 3);
+    if (tokens.some((tok) => lcT.includes(tok))) highSignalSearch.push(t);
+    else lowSignalSearch.push(t);
+  }
+  // Concatenate: article images → high-signal search → category → low-signal search
+  for (const t of [...wikiFiles, ...highSignalSearch, ...catFiles, ...lowSignalSearch]) {
     if (!/\.(jpg|jpeg|png)$/i.test(t)) continue;
     if (PAINT_BLACKLIST_RE.test(t)) continue;
     if (seen.has(t)) continue;
