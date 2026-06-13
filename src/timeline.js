@@ -190,6 +190,13 @@ export class Timeline {
   // ── TRANSFORM / TICK LOOP ────────────────────────────────────────────────
   start() {
     const tick = () => {
+      // On the first few frames, re-run _fit() — if the screen was just
+      // unhidden, layout may have been 0 and we need a real refit now
+      // that the browser has actually computed the viewport size.
+      if (this._frames < 30) {
+        this._frames = (this._frames || 0) + 1;
+        this._fit();
+      }
       this.view.x += (this.target.x - this.view.x) * 0.18;
       this.view.y += (this.target.y - this.view.y) * 0.18;
       this.view.s += (this.target.s - this.view.s) * 0.18;
@@ -227,12 +234,15 @@ export class Timeline {
   }
 
   _fit() {
-    const w = this.viewport.clientWidth;
-    const h = this.viewport.clientHeight;
-    // If the screen was just unhidden, layout may not be computed yet and
-    // both dimensions read as 0. Bail out and let the next frame (or the
-    // ResizeObserver) refit.
-    if (w < 2 || h < 2) return;
+    let w = this.viewport.clientWidth;
+    let h = this.viewport.clientHeight;
+    // Fall back to window dimensions if the viewport's layout hasn't
+    // been computed yet (the screen was just unhidden, the browser
+    // hasn't run layout for this element). This keeps _fit() functional
+    // on the very first call after enterTimeline().
+    if (w < 2) w = window.innerWidth || document.documentElement.clientWidth || 0;
+    if (h < 2) h = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (w < 2 || h < 2) return; // truly nothing to fit into yet
     const totalW = (TIMELINE_MAX_YEAR - TIMELINE_MIN_YEAR) * PX_PER_YEAR;
     const scaleX = w / (totalW + 200);
     const s = clamp(Math.min(scaleX, 1), 0.35, 1);

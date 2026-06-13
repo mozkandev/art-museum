@@ -45,11 +45,10 @@ let timeline = null;
 function enterTimeline() {
   const screen = $("#timeline-screen");
   screen.classList.remove("hidden");
-  // Force layout so the newly-unhidden .screen has a real size before
-  // we construct Timeline. Without this, the viewport's clientWidth can
-  // still read 0 in the same frame (display:none → display:block is
-  // logically applied but layout hasn't been computed), which makes
-  // _fit() bail and the world stays pinned to (0,0).
+  // Force a synchronous layout pass so the newly-unhidden .screen has a
+  // real size before we construct Timeline. Otherwise the viewport's
+  // clientWidth can still read 0 in the same tick, _fit() bails, and the
+  // world stays pinned to (0,0) looking "off".
   void screen.offsetHeight;
   void $("#timeline-viewport").offsetHeight;
   if (!timeline) {
@@ -59,13 +58,26 @@ function enterTimeline() {
       yearReadout: $("#year-readout"),
       onArtistClick: openPlacard,
     });
-    timeline.start();
-    timeline.reveal();
-  } else {
-    // Already constructed (returning from gallery). Re-fit because the
-    // viewport was display:none while we were in the gallery.
-    timeline._fit();
   }
+  // Always re-fit: first time we want a real centred layout, returning
+  // from the gallery (where the screen was display:none) we want to
+  // re-evaluate dimensions. _fit() is no-op when dims are 0.
+  timeline._fit();
+  // Refit once the webfonts have actually loaded — that reflow can change
+  // viewport height (e.g. a font that was FOUT'd as wider before it loads).
+  // Then once more on the next frame to catch any final layout shifts.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => timeline._fit());
+  }
+  requestAnimationFrame(() => {
+    timeline._fit();
+    requestAnimationFrame(() => timeline._fit());
+  });
+  if (!timeline.started) {
+    timeline.start();
+    timeline.started = true;
+  }
+  timeline.reveal();
 }
 
 // ── PLACARD ───────────────────────────────────────────────────────────────
