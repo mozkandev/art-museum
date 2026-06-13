@@ -228,11 +228,15 @@ export class Timeline {
 
   // ── PUBLIC ───────────────────────────────────────────────────────────────
   reveal() {
+    // Only fade in opacity. The Y translate is omitted because cards are
+    // already positioned via inline transform: translate(x, y), and GSAP's
+    // y:0 would overwrite the y component and snap the card back to the
+    // axis (losing the 10px gap).
     const els = this.cards.map((c) => c.el);
     gsap.fromTo(
       els,
-      { opacity: 0, y: (i) => (i % 2 === 0 ? 30 : -30) },
-      { opacity: 1, y: 0, duration: 0.9, ease: "power3.out", stagger: 0.06 },
+      { opacity: 0 },
+      { opacity: 1, duration: 0.9, ease: "power3.out", stagger: 0.06 },
     );
     gsap.fromTo(this.axisEl, { opacity: 0 }, { opacity: 1, duration: 1.2, ease: "power2.out" });
   }
