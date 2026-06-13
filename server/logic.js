@@ -47,6 +47,7 @@ export function cleanTitle(raw) {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/^(?:[A-Za-zÀ-ÿ]{2,15}):\s+/i, "")
+    .replace(/(?:^|[\s,;])(?:[A-Za-zÀ-ÿ]{2,15}):\s+/g, " ")
     .replace(/\s*(label|date|description|title|depicts|instance|part|series)\s*QS:[\s\S]*$/i, "")
     .replace(/\s*[Aa]lternative (?:title|label)s?\s*\(?s?\)?:\s*[\s\S]*$/i, "")
     .replace(/\s*-\s*Google Art Project.*$/i, "")
