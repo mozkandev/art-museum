@@ -203,15 +203,18 @@ export async function gatherCandidates(name) {
   }
 
   let searchFiles = [];
-  if (wikiFiles.length + catFiles.length < 8) {
-    const s = await fetchJson(
-      `https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srsearch=${encodeURIComponent(
-        `"${name}" painting oil on canvas`,
-      )}&srlimit=80&origin=*`,
-    );
-    if (s.ok && s.data?.query?.search) {
-      for (const m of s.data.query.search) searchFiles.push(m.title);
-    }
+  // Always probe the full-text search too — the article + category sources
+  // sometimes miss iconic works (e.g. Mona Lisa isn't in the "Paintings by
+  // Leonardo da Vinci" Commons category, which is empty, but it is in
+  // full-text search). We then merge, dedupe, and let the priority order
+  // in `priority` Map below keep the canonical sources first.
+  const s = await fetchJson(
+    `https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srsearch=${encodeURIComponent(
+      `"${name}" painting`,
+    )}&srlimit=80&origin=*`,
+  );
+  if (s.ok && s.data?.query?.search) {
+    for (const m of s.data.query.search) searchFiles.push(m.title);
   }
 
   const seen = new Set();
@@ -281,7 +284,7 @@ export async function batchImageInfo(titles) {
   return out;
 }
 
-export async function fetchPaintings(name, max = 14) {
+export async function fetchPaintings(name, max = 28) {
   const key = `paintings:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;

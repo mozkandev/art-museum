@@ -12,7 +12,7 @@ import { gsap } from "gsap";
 
 const WALL_H = 5.4;
 const HALL_W = 9.5;
-const SPACING = 4.8;
+const SPACING = 3.6;   // tighter spacing so a 28-painting hall stays walkable
 const EYE = 1.7;
 const FOV = 62;
 const SHADOW_BUDGET = 6;
@@ -423,6 +423,13 @@ export class Gallery {
   _onKeyDown = (e) => {
     if (!this.controls.isLocked) return;
     const k = e.code;
+    // Movement keys: prevent the browser's default behaviour (page scroll on
+    // arrow keys, quick-search overlay on Firefox, etc.) which can also
+    // produce OS-level "key click" audio on some platforms.
+    if (k === "KeyW" || k === "KeyS" || k === "KeyA" || k === "KeyD" ||
+        k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight") {
+      e.preventDefault();
+    }
     if (k === "KeyW" || k === "ArrowUp") this._keys.w = 1;
     if (k === "KeyS" || k === "ArrowDown") this._keys.s = 1;
     if (k === "KeyA" || k === "ArrowLeft") this._keys.a = 1;
@@ -431,6 +438,10 @@ export class Gallery {
   };
   _onKeyUp = (e) => {
     const k = e.code;
+    if (k === "KeyW" || k === "KeyS" || k === "KeyA" || k === "KeyD" ||
+        k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight") {
+      e.preventDefault();
+    }
     if (k === "KeyW" || k === "ArrowUp") this._keys.w = 0;
     if (k === "KeyS" || k === "ArrowDown") this._keys.s = 0;
     if (k === "KeyA" || k === "ArrowLeft") this._keys.a = 0;
