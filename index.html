@@ -92,6 +92,12 @@
       </div>
     </section>
 
+    <!-- Always-on ambient audio hint (top-right). M = mute toggle. -->
+    <div id="audio-hint" class="audio-hint" aria-live="polite" title="Press M to mute the ambient music">
+      <span class="audio-hint__icon" aria-hidden="true">♪</span>
+      <span class="audio-hint__label">press <kbd>M</kbd> · <span id="audio-hint-state">sound on</span></span>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

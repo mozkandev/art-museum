@@ -274,9 +274,30 @@ document.addEventListener("pointerlockchange", () => {
 $("#lock-enter").addEventListener("click", lockIn);
 $("#lock-back").addEventListener("click", backToTimeline);
 
+// ── AUDIO MUTE TOGGLE (M key) ─────────────────────────────────────────────
+function updateAudioHint() {
+  const el = $("#audio-hint");
+  const state = $("#audio-hint-state");
+  if (!el || !state) return;
+  state.textContent = Audio.isMuted() ? "sound off" : "sound on";
+  el.classList.toggle("audio-hint--muted", Audio.isMuted());
+}
+window.addEventListener("keydown", (e) => {
+  // Ignore key events that originated in form fields (none currently, but
+  // future-proof).
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key === "m" || e.key === "M") {
+    e.preventDefault();
+    Audio.toggleMute();
+    updateAudioHint();
+  }
+});
+
 // ── BOOT ──────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   setupIntro();
+  updateAudioHint();
 });
 
 function escapeHtml(s) {

@@ -13,6 +13,7 @@ let ctx = null;
 let masterGain = null;
 let started = false;
 let scheduled = []; // intervals + timeouts for arpeggio
+let muted = false; // user-controlled mute (M key)
 
 // A minor: A2..A3 — the "old gallery" base.
 const ROOT_FREQ = 110; // A2
@@ -149,16 +150,18 @@ export function start() {
   // Kick off the arp immediately so the gallery isn't silent for 1s.
   playStep();
 
-  // ── Fade in the master + per-voice levels ────────────────────────────
+  // ── Fade in the master + per-voice levels (volume reduced ~50% from
+  // the original levels — gallery ambience should be felt, not heard).
   const now = ctx.currentTime;
+  const targetMaster = muted ? 0 : 0.16;
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(0, now);
-  masterGain.gain.linearRampToValueAtTime(0.32, now + 4.0); // gentle 4s fade-in
+  masterGain.gain.linearRampToValueAtTime(targetMaster, now + 4.0);
   droneGain.gain.linearRampToValueAtTime(0.45, now + 4.0);
   padGain.gain.linearRampToValueAtTime(0.25, now + 4.0);
   arpGain.gain.linearRampToValueAtTime(0.6, now + 4.0);
 
-  // Stash refs so stop() can fade & tear down.
+  // Stash refs so stop()/mute() can fade & tear down.
   ctx._gallery = { droneGain, padGain, arpGain, padOscs, drone1, drone2 };
 }
 
@@ -182,4 +185,21 @@ export function stop() {
   }
   for (const id of scheduled) clearInterval(id);
   scheduled = [];
+}
+
+/** Toggle the mute. Returns the new muted state. */
+export function toggleMute() {
+  muted = !muted;
+  if (ctx && masterGain && started) {
+    const now = ctx.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+    masterGain.gain.linearRampToValueAtTime(muted ? 0 : 0.16, now + 0.4);
+  }
+  return muted;
+}
+
+/** Read-only state. */
+export function isMuted() {
+  return muted;
 }

@@ -454,3 +454,53 @@ button { font-family: inherit; cursor: pointer; }
 }
 .gallery__hud .dot { width: 4px; height: 4px; background: var(--gold); border-radius: 50%; }
 #gallery-hud-artist { color: var(--gold); }
+
+/* ── AUDIO HINT (top-right, always visible) ───────────────────────────── */
+.audio-hint {
+  position: fixed;
+  top: 22px;
+  right: 36px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: rgba(12, 11, 9, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  user-select: none;
+  pointer-events: none; /* passive; we toggle on M key, not click */
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.audio-hint__icon {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--gold);
+  display: inline-block;
+  transform: translateY(-1px);
+}
+.audio-hint kbd {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 1px 5px;
+  margin: 0 2px;
+  color: var(--ink);
+  background: rgba(232, 226, 212, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.audio-hint--muted {
+  color: var(--gold-2);
+  border-color: var(--gold-2);
+}
+.audio-hint--muted .audio-hint__icon { color: var(--gold-2); opacity: 0.5; }
