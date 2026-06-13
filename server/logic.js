@@ -37,7 +37,15 @@ export async function fetchJson(url, attempt = 0) {
 
 export function cleanTitle(raw) {
   if (!raw) return "";
+  // Strip any HTML tags first — Wikimedia ObjectName/Artist often contains
+  // structured data markup like <div class="fn">…</div> or <i><b>…</b></i>.
   let s = String(raw)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
     .replace(/\s*QS:[,;]\s*P\d+.*$/i, "")
     .replace(/\s*label:\s*.*$/i, "")
     .replace(/\s*-\s*Google Art Project.*$/i, "")
@@ -54,9 +62,12 @@ export function cleanTitle(raw) {
 export function cleanDate(raw) {
   if (!raw) return "";
   return String(raw)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
     .replace(/\s*QS:[,;]\s*P\d+.*$/i, "")
     .replace(/\s*-\s*Google Art Project.*$/i, "")
     .replace(/\s*-\s*WGA\s*\d+.*$/i, "")
+    .replace(/\s{2,}/g, " ")
     .trim()
     .slice(0, 60);
 }
