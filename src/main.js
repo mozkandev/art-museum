@@ -4,6 +4,7 @@ import { gsap } from "gsap";
 import { Timeline } from "./timeline.js";
 import { Gallery } from "./gallery.js";
 import { getArtist, getPaintings } from "./api.js";
+import * as Audio from "./audio.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -154,6 +155,12 @@ function enterGallery(artist, period) {
   currentArtist = artist;
   currentPeriod = period;
 
+  // Kick off the procedural ambient music. The click that opened the
+  // placard satisfied the browser's autoplay gesture requirement, so
+  // AudioContext.resume() will succeed here.
+  Audio.unlock();
+  Audio.start();
+
   const enterBtn = $("#enter-gallery");
   if (enterBtn) { enterBtn.disabled = true; enterBtn.textContent = "Collecting the works…"; }
 
@@ -241,6 +248,8 @@ function lockIn() {
 }
 
 function backToTimeline() {
+  // Fade out the gallery music before tearing down the scene.
+  Audio.stop();
   if (gallery) {
     gallery.dispose();
     gallery = null;
