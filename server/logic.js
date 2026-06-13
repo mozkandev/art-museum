@@ -225,23 +225,30 @@ export async function gatherCandidates(name) {
   const normTitle = (t) => t.toLowerCase().replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
   // Boost search hits whose filename strongly references the artist name —
   // these are typically the canonical / most-famous works that the article
-  // and category sources missed. We insert them between article images and
-  // the bulk of the category results, not at the tail.
+  // and category sources missed (e.g. Mona Lisa for Leonardo, where the
+  // Commons "Paintings by Leonardo da Vinci" category is empty). We
+  // restrict high-signal to title-like matches: filename must contain
+  // "by <name>", start with "<name>", or otherwise look canonical.
   const lcName = name.toLowerCase();
+  const tokens = lcName.split(/\s+/).filter((w) => w.length > 3);
   const highSignalSearch = [];
   const lowSignalSearch = [];
   for (const t of searchFiles) {
     const lcT = t.toLowerCase();
-    // Filename must contain a token of the artist name (e.g. "leonardo da vinci"
-    // or "monet" / "picasso") for it to count as a high-signal hit.
-    const tokens = lcName.split(/\s+/).filter((w) => w.length > 3);
-    if (tokens.some((tok) => lcT.includes(tok))) highSignalSearch.push(t);
+    // Canonical: starts with the artist surname, or contains "by <name>",
+    // or filename begins with their most-distinctive token.
+    const startsWithName = tokens.some((tok) => lcT.startsWith("file:" + tok));
+    const containsByName = tokens.some((tok) =>
+      lcT.includes("by " + tok) || lcT.includes("-" + tok + "-") || lcT.includes(", " + tok)
+    );
+    if (startsWithName || containsByName) highSignalSearch.push(t);
     else lowSignalSearch.push(t);
   }
-  // Concatenate: high-signal search hits go FIRST (most famous works like
-  // Mona Lisa which the article and category sources missed), then article
-  // images, then the rest of the category, then bulk low-signal search.
-  for (const t of [...highSignalSearch, ...wikiFiles, ...catFiles, ...lowSignalSearch]) {
+  // Concatenate: article images + high-signal search first (most-canonical
+  // sources), then category, then a CAPPED number of low-signal search
+  // hits to fill out the gallery without flooding it with fan-art noise.
+  const LOW_SIGNAL_CAP = 6;
+  for (const t of [...highSignalSearch, ...wikiFiles, ...catFiles, ...lowSignalSearch.slice(0, LOW_SIGNAL_CAP)]) {
     if (!/\.(jpg|jpeg|png)$/i.test(t)) continue;
     if (PAINT_BLACKLIST_RE.test(t)) continue;
     const k = normTitle(t);
@@ -308,9 +315,9 @@ export async function batchImageInfo(titles) {
 }
 
 export async function fetchPaintings(name, max = 28) {
-  // v3: normalize filenames (underscores) for dedupe + put high-signal
-  // search hits first so iconic works like Mona Lisa survive the 28 cap.
-  const key = `paintings:v3:${name}`;
+  // v4: stricter high-signal criteria (canonical filename patterns only)
+  // + LOW_SIGNAL_CAP=6 to keep gallery quality up while raising the cap.
+  const key = `paintings:v4:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
