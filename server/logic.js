@@ -48,6 +48,10 @@ export function cleanTitle(raw) {
     .replace(/&quot;/g, '"')
     .replace(/^(?:[A-Za-zÀ-ÿ]{2,15}):\s+/i, "")
     .replace(/(?:^|[\s,;])(?:[A-Za-zÀ-ÿ]{2,15}):\s+/g, " ")
+    // Collapse "X, X" / "X / X" duplicates that come from a multi-value
+    // ObjectName field — e.g. "Mona Lisa, Mona Lisa", "Baptism of Christ,
+    // Baptism of Christ". Only exact-split duplicates, not the title itself.
+    .replace(/^([^,;\/]{4,80})\s*[,;]\s*\1$/g, "$1")
     .replace(/\s*(label|date|description|title|depicts|instance|part|series)\s*QS:[\s\S]*$/i, "")
     .replace(/\s*[Aa]lternative (?:title|label)s?\s*\(?s?\)?:\s*[\s\S]*$/i, "")
     .replace(/\s*-\s*Google Art Project.*$/i, "")
@@ -315,9 +319,8 @@ export async function batchImageInfo(titles) {
 }
 
 export async function fetchPaintings(name, max = 28) {
-  // v4: stricter high-signal criteria (canonical filename patterns only)
-  // + LOW_SIGNAL_CAP=6 to keep gallery quality up while raising the cap.
-  const key = `paintings:v4:${name}`;
+  // v5: collapse X, X duplicates in cleanTitle (e.g. "Mona Lisa, Mona Lisa")
+  const key = `paintings:v5:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
