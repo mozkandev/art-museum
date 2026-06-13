@@ -229,12 +229,23 @@ export class Timeline {
   _fit() {
     const w = this.viewport.clientWidth;
     const h = this.viewport.clientHeight;
+    // If the screen was just unhidden, layout may not be computed yet and
+    // both dimensions read as 0. Bail out and let the next frame (or the
+    // ResizeObserver) refit.
+    if (w < 2 || h < 2) return;
     const totalW = (TIMELINE_MAX_YEAR - TIMELINE_MIN_YEAR) * PX_PER_YEAR;
     const scaleX = w / (totalW + 200);
     const s = clamp(Math.min(scaleX, 1), 0.35, 1);
     this.target.s = s;
     this.target.x = (w - totalW * s) / 2;
     this.target.y = -h / 2; // center axis vertically
+    // Snap view to target so the first paint is already centered (no slide-in
+    // from the 0,0 default, which is what made the timeline look "off").
+    this.view.x = this.target.x;
+    this.view.y = this.target.y;
+    this.view.s = this.target.s;
+    this.world.style.transform =
+      `translate3d(${this.view.x}px, ${this.view.y + h / 2}px, 0) scale(${this.view.s})`;
   }
 
   zoomToPeriod(period) {

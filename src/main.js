@@ -52,6 +52,14 @@ function enterTimeline() {
       yearReadout: $("#year-readout"),
       onArtistClick: openPlacard,
     });
+    // _fit() inside the constructor can read clientWidth=0 because layout
+    // for the newly-unhidden screen hasn't been computed yet. Re-fit on the
+    // next frame so the world lands centered instead of pinned to (0,0).
+    requestAnimationFrame(() => {
+      timeline._fit();
+      // Also refit on the following frame in case fonts/layout reflow.
+      requestAnimationFrame(() => timeline._fit());
+    });
     timeline.start();
     timeline.reveal();
   }
