@@ -159,6 +159,8 @@ function enterGallery(artist, period) {
 
   getPaintings(artist.name)
     .then((paintings) => {
+      console.log("[enterGallery] paintings for", artist.name, paintings.length,
+        "urls:", paintings.map(p => (p.url || p.fullUrl || "").slice(0, 80)));
       if (paintings.length < 2) {
         loading.classList.add("hidden");
         overlay.classList.remove("hidden");

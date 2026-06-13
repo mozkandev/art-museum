@@ -328,6 +328,19 @@ export class Gallery {
         canvasMat.opacity = 1;
         return;
       }
+      // Each slot is "pending" until the texture resolves one way or the
+      // other. Don't double-count if the safety tick already fired.
+      let resolved = false;
+      const finish = (ok) => {
+        if (resolved || this.disposed) return;
+        resolved = true;
+        loaded++;
+        report();
+        if (!ok) {
+          canvasMat.color.set(0x2a2a3a);
+          canvasMat.opacity = 1;
+        }
+      };
       loader.load(
         url,
         (tex) => {
@@ -341,17 +354,13 @@ export class Gallery {
           canvasMat.color.set(0xffffff);
           gsap.to(canvasMat, { opacity: 1, duration: 0.7, ease: "power2.out" });
           this._disposables.push(tex);
+          finish(true);
         },
         undefined,
-        () => {
-          if (this.disposed) return;
-          loaded++;
-          report();
-          // soft fallback
-          canvasMat.color.set(0x2a2a3a);
-          canvasMat.opacity = 1;
-        },
+        () => finish(false),
       );
+      // Safety: if the load is still pending after 12s, count as failed
+      setTimeout(() => finish(false), 12000);
 
       // Always increment + report on success/error (texture callbacks)
       const tryReport = () => {
