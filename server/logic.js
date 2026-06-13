@@ -219,6 +219,10 @@ export async function gatherCandidates(name) {
 
   const seen = new Set();
   const ordered = [];
+  // Normalize: Wikipedia media-list uses underscores in titles (it's
+  // treating them as URL paths), Commons search uses spaces + commas. We
+  // dedupe against a normalized form so we don't double-fetch the same file.
+  const normTitle = (t) => t.toLowerCase().replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
   // Boost search hits whose filename strongly references the artist name —
   // these are typically the canonical / most-famous works that the article
   // and category sources missed. We insert them between article images and
@@ -234,12 +238,15 @@ export async function gatherCandidates(name) {
     if (tokens.some((tok) => lcT.includes(tok))) highSignalSearch.push(t);
     else lowSignalSearch.push(t);
   }
-  // Concatenate: article images → high-signal search → category → low-signal search
-  for (const t of [...wikiFiles, ...highSignalSearch, ...catFiles, ...lowSignalSearch]) {
+  // Concatenate: high-signal search hits go FIRST (most famous works like
+  // Mona Lisa which the article and category sources missed), then article
+  // images, then the rest of the category, then bulk low-signal search.
+  for (const t of [...highSignalSearch, ...wikiFiles, ...catFiles, ...lowSignalSearch]) {
     if (!/\.(jpg|jpeg|png)$/i.test(t)) continue;
     if (PAINT_BLACKLIST_RE.test(t)) continue;
-    if (seen.has(t)) continue;
-    seen.add(t);
+    const k = normTitle(t);
+    if (seen.has(k)) continue;
+    seen.add(k);
     ordered.push(t);
   }
   return ordered;
@@ -301,8 +308,9 @@ export async function batchImageInfo(titles) {
 }
 
 export async function fetchPaintings(name, max = 28) {
-  // v2: include priority-boost logic; bump to invalidate old caches.
-  const key = `paintings:v2:${name}`;
+  // v3: normalize filenames (underscores) for dedupe + put high-signal
+  // search hits first so iconic works like Mona Lisa survive the 28 cap.
+  const key = `paintings:v3:${name}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
