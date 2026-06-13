@@ -288,9 +288,11 @@ export class Gallery {
       const right = left.clone(); right.position.x = pw / 2 + frameThickness / 2;
       [top, bot, left, right].forEach((m) => { m.castShadow = true; group.add(m); });
 
-      // Canvas plane
+      // Canvas plane — start with the placeholder color shown; the texture
+      // will be swapped in on load. NOT transparent: a transparent material
+      // with opacity:0 + map later means the material needs a program
+      // recompile, which is easy to miss and ends up with invisible planes.
       const canvasMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.85 });
-      canvasMat.transparent = true; canvasMat.opacity = 0;
       const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), canvasMat);
       group.add(canvasMesh);
 
@@ -352,7 +354,9 @@ export class Gallery {
           tex.anisotropy = 8;
           canvasMat.map = tex;
           canvasMat.color.set(0xffffff);
-          gsap.to(canvasMat, { opacity: 1, duration: 0.7, ease: "power2.out" });
+          // Force Three.js to re-evaluate the material's program now that
+          // the map is set (color was changed too).
+          canvasMat.needsUpdate = true;
           this._disposables.push(tex);
           finish(true);
         },
