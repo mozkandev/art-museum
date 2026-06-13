@@ -83,7 +83,8 @@ export class Timeline {
     // Always anchor cards BELOW the axis (positive Y in world space, so
     // they sit in the lower half of the viewport). Cards used to be split
     // above/below which made the upper half look empty and crowded the top.
-    const y = 60;
+    // 10px breathing room between the axis line and the card top.
+    const y = 10;
 
     const card = document.createElement("article");
     card.className = "tl-card";
