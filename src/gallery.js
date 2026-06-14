@@ -795,20 +795,11 @@ function endWallBaseTexture(artist, periodName) {
   ctx.strokeStyle = "#c8a45c"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(540, 540); ctx.lineTo(940, 540); ctx.stroke();
 
-  // artist name (large serif caps)
-  ctx.fillStyle = "#c8a45c";
-  ctx.textAlign = "center";
-  ctx.font = "600 96px 'Cormorant Garamond', 'Times New Roman', serif";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText((artist || "").toUpperCase(), 740, 480);
-  // period
-  ctx.fillStyle = "#9b937f";
-  ctx.font = "300 28px 'Inter', sans-serif";
-  ctx.fillText((periodName || "").toUpperCase(), 740, 600);
-  // subtle "MUSÉE" eyebrow
-  ctx.fillStyle = "#6a604c";
-  ctx.font = "400 22px 'Inter', sans-serif";
-  ctx.fillText("— MUSÉE —", 740, 700);
+  // Right column: artist name + period + eyebrow. All sized to fit the
+  // ~400px column we carved out on the right.
+  drawArtistNameBlock(ctx, artist, 740, 480);
+  drawArtistPeriodBlock(ctx, periodName, 740, 600);
+  drawEyebrow(ctx, "— MUSÉE —", 740, 700);
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -873,20 +864,11 @@ function drawPortraitIntoCanvas(artist, periodName, img) {
   ctx.strokeStyle = "#c8a45c"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(540, 540); ctx.lineTo(940, 540); ctx.stroke();
 
-  // artist name (large serif caps)
-  ctx.fillStyle = "#c8a45c";
-  ctx.textAlign = "center";
-  ctx.font = "600 96px 'Cormorant Garamond', 'Times New Roman', serif";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText((artist || "").toUpperCase(), 740, 480);
-  // period
-  ctx.fillStyle = "#9b937f";
-  ctx.font = "300 28px 'Inter', sans-serif";
-  ctx.fillText((periodName || "").toUpperCase(), 740, 600);
-  // eyebrow
-  ctx.fillStyle = "#6a604c";
-  ctx.font = "400 22px 'Inter', sans-serif";
-  ctx.fillText("— MUSÉE —", 740, 700);
+  // Right column — same layout as the base texture, so the swap between
+  // base → portrait doesn't shift the text.
+  drawArtistNameBlock(ctx, artist, 740, 480);
+  drawArtistPeriodBlock(ctx, periodName, 740, 600);
+  drawEyebrow(ctx, "— MUSÉE —", 740, 700);
 
   return c;
 }
@@ -913,6 +895,93 @@ function drawMonogramCartouche(ctx, artist, cx, cy, r) {
   ctx.textBaseline = "middle";
   ctx.font = "300 220px 'Cormorant Garamond', 'Times New Roman', serif";
   ctx.fillText(initial, cx, cy + 10);
+}
+
+// Right-column typography for the end wall. Shared between the base
+// and the portrait textures so the layout is identical.
+//
+// The right column is ~400px wide (x: 540 → 940). The artist name was
+// hard-set to 96px caps, which overflowed on long names (e.g. "Hieronymus
+// Bosch", "Pierre-Auguste Renoir"). This helper auto-shrinks the font to
+// fit, then word-wraps onto a second line only if it still doesn't fit.
+function drawArtistNameBlock(ctx, artist, cx, baselineY) {
+  const name = String(artist || "").trim().toUpperCase();
+  if (!name) return;
+  // Try fonts from largest to smallest; pick the first that lets the
+  // text fit on a single line within the right column.
+  const maxW = 380;            // right column inner width
+  const candidates = [96, 84, 72, 60, 52, 44];
+  let chosen = candidates[candidates.length - 1];
+  for (const px of candidates) {
+    ctx.font = `600 ${px}px 'Cormorant Garamond', 'Times New Roman', serif`;
+    if (ctx.measureText(name).width <= maxW) { chosen = px; break; }
+  }
+  // Word-wrap if it still doesn't fit even at the smallest size — names
+  // like "Hieronymus Bosch" at 44px still need ~250px which is fine, but
+  // "Pierre-Auguste Renoir" at 44px is ~360px. Wrap to 2 lines max.
+  const words = name.split(/\s+/);
+  let lines = [name];
+  if (ctx.measureText(name).width > maxW) {
+    // Greedy wrap
+    const out = [];
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width > maxW && cur) {
+        out.push(cur);
+        cur = w;
+      } else {
+        cur = test;
+      }
+    }
+    if (cur) out.push(cur);
+    // Cap at 2 lines; if the last line is still too wide, ellipsize.
+    if (out.length > 2) {
+      const joined = out.slice(0, 2).join(" ");
+      // Replace the last char with an ellipsis if we had to truncate
+      let last = out[1];
+      while (ctx.measureText(last + "…").width > maxW && last.length) last = last.slice(0, -1);
+      lines = [out[0], (last + "…").trim()];
+    } else {
+      lines = out;
+    }
+  }
+  // Draw centred on cx. lineHeight = 0.95 * px (tight serif tracking).
+  const lineH = Math.round(chosen * 0.95);
+  const totalH = lines.length * lineH;
+  // baselineY is the visual middle of the block, so first line goes
+  // upward by totalH/2 - lineH/2.
+  const firstY = baselineY - totalH / 2 + lineH * 0.78;
+  ctx.fillStyle = "#c8a45c";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx, firstY + i * lineH);
+}
+
+function drawArtistPeriodBlock(ctx, periodName, cx, y) {
+  const text = String(periodName || "").trim().toUpperCase();
+  if (!text) return;
+  // Smaller text, but still shrink-to-fit so a long "EARLY RENAISSANCE
+  // (FLORENTINE SCHOOL)" doesn't run into the column edge.
+  const maxW = 380;
+  let px = 28;
+  ctx.font = `300 ${px}px 'Inter', sans-serif`;
+  if (ctx.measureText(text).width > maxW) {
+    px = 22;
+    ctx.font = `300 ${px}px 'Inter', sans-serif`;
+  }
+  ctx.fillStyle = "#9b937f";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, cx, y);
+}
+
+function drawEyebrow(ctx, text, cx, y) {
+  ctx.fillStyle = "#6a604c";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "400 22px 'Inter', sans-serif";
+  ctx.fillText(text, cx, y);
 }
 
 function wrapText(ctx, text, x, y, maxW, lineH, maxLines) {
