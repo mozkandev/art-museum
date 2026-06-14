@@ -225,6 +225,46 @@ button { font-family: inherit; cursor: pointer; }
 }
 .tl-chip:hover .tl-chip__dot { background: var(--bg); }
 
+/* Zigzag layout: alternating cards sit above/below the axis. The
+ * "above" variant keeps the same internal order (years → name →
+ * blurb → chips) so reading direction doesn't change — the accent
+ * stripe simply flips from the left edge to the right edge, giving
+ * a mirror reading across the axis (Renaissance ↔ Baroque: the two
+ * cards "face" each other across the timeline).
+ */
+.tl-card--above {
+  border-left: 1px solid var(--line);
+  border-right: 3px solid var(--pc, var(--gold));
+  box-shadow: 0 10px 32px rgba(0,0,0,0.55);
+}
+.tl-card--above .tl-card__head { text-align: right; }
+.tl-card--above .tl-card__chips { justify-content: flex-end; }
+.tl-card--above .tl-card__years { color: var(--pc, var(--gold)); }
+
+/* Connector tick: a small line from the card's "near" edge to the
+ * axis. Drawn via a pseudo-element so we don't need extra DOM. The
+ * default (.tl-card) points up (toward the axis), .tl-card--above
+ * points down.
+ */
+.tl-card::after,
+.tl-card--above::after {
+  content: "";
+  position: absolute;
+  left: 1px;           /* aligned with the accent stripe (3px wide) */
+  width: 1px;
+  background: var(--pc, var(--gold));
+  opacity: 0.7;
+  pointer-events: none;
+}
+.tl-card::after {
+  /* below: tick from card-top upward to the axis */
+  top: -14px; height: 14px;
+}
+.tl-card--above::after {
+  /* above: tick from card-bottom downward to the axis */
+  bottom: -14px; height: 14px;
+}
+
 /* ── PLACARD ───────────────────────────────────────────────────────────── */
 .placard-backdrop {
   position: fixed; inset: 0;

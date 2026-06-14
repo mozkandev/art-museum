@@ -63,31 +63,50 @@ export class Timeline {
     rule.className = "tl-axis__rule";
     this.axisEl.appendChild(rule);
 
-    // Period cards
+    // Period cards — alternating above/below the axis (zigzag).
+    // Cards are first built with no Y offset, then re-laid out after
+    // append so we can measure each card's actual height and place
+    // "above" cards so their bottom edge sits on the axis.
     this.cards = [];
     PERIODS.forEach((p, i) => {
-      const card = this._buildCard(p, i);
+      const side = i % 2 === 0 ? -1 : 1; // -1 = above, +1 = below
+      const card = this._buildCard(p, i, side);
       this.world.appendChild(card);
-      this.cards.push({ el: card, period: p, side: i % 2 === 0 ? -1 : 1 });
+      this.cards.push({ el: card, period: p, side });
     });
+    // Lay out vertically now that heights are measurable.
+    this._relayoutCards();
 
     // resize observer for re-fitting
     this._ro = new ResizeObserver(() => this._fit());
     this._ro.observe(this.viewport);
   }
 
-  _buildCard(p, i) {
+  // Place cards in their final vertical positions. Cards on the "above"
+  // side get their bottom edge aligned to the axis (with a small gap
+  // so the connector tick reads). Cards on the "below" side keep the
+  // 10px gap below the axis. The horizontal x was set in _buildCard
+  // and isn't touched here.
+  _relayoutCards() {
+    for (const c of this.cards) {
+      const h = c.el.offsetHeight || CARD_H;
+      const x = yearToX(c.period.start);
+      const y = c.side === 1
+        ? 10                            // below the axis
+        : -(h + 20);                    // above the axis, bottom edge at y=-20
+      c.el.style.transform = `translate(${x}px, ${y}px)`;
+    }
+  }
+
+  _buildCard(p, i, side) {
     const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
     const x = yearToX(p.start);
-    const side = i % 2 === 0 ? -1 : 1;
-    // Always anchor cards BELOW the axis (positive Y in world space, so
-    // they sit in the lower half of the viewport). Cards used to be split
-    // above/below which made the upper half look empty and crowded the top.
-    // 10px breathing room between the axis line and the card top.
-    const y = 10;
+    // Y is set later by _relayoutCards() so we can measure heights
+    // and place "above" cards so their bottom edge sits on the axis.
+    const y = side === 1 ? 10 : 0; // placeholder; relayout fixes this
 
     const card = document.createElement("article");
-    card.className = "tl-card";
+    card.className = side === 1 ? "tl-card" : "tl-card tl-card--above";
     card.style.setProperty("--pc", p.color);
     card.style.width = `${w}px`;
     card.style.transform = `translate(${x}px, ${y}px)`;
@@ -256,10 +275,12 @@ export class Timeline {
     const s = clamp(Math.min(scaleX, 1), 0.35, 1);
     this.target.s = s;
     this.target.x = (w - totalW * s) / 2;
-    // Position the axis ~38% from the top of the viewport so cards (which
-    // hang below) sit in the lower 60% and the upper portion of the
-    // screen is breathable negative space.
-    this.target.y = -h * 0.12;
+    // With the zigzag layout (cards alternate above and below the
+    // axis), the axis needs to sit at the vertical centre of the
+    // viewport — otherwise whichever row is on the wrong side gets
+    // cropped. view.y = 0 puts world Y=0 (the axis) at viewport
+    // mid-height.
+    this.target.y = 0;
     // Snap view to target so the first paint is already centered (no slide-in
     // from the 0,0 default, which is what made the timeline look "off").
     this.view.x = this.target.x;
@@ -276,7 +297,8 @@ export class Timeline {
     const s = clamp(Math.min((w * 0.6) / cw, 3), 0.6, 3);
     this.target.s = s;
     this.target.x = w / 2 - cx * s;
-    this.target.y = -this.viewportH() / 2;
+    // Axis stays at viewport mid-height (matches _fit()).
+    this.target.y = 0;
   }
 }
 
