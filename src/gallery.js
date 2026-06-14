@@ -20,11 +20,12 @@ const SHADOW_BUDGET = 6;
 RectAreaLightUniformsLib.init();
 
 export class Gallery {
-  constructor({ container, paintings, artist, periodName, onProgress }) {
+  constructor({ container, paintings, artist, periodName, artistPortrait, onProgress }) {
     this.container = container;
     this.paintings = paintings;
     this.artist = artist;
     this.periodName = periodName;
+    this.artistPortrait = artistPortrait || null;
     this.onProgress = onProgress || (() => {});
 
     this.perWall = Math.max(1, Math.ceil(this.paintings.length / 2));
@@ -157,9 +158,13 @@ export class Gallery {
     this.scene.add(wallL, wallR);
     this._disposables.push(wallGeo, wallMat.map, wallMat);
 
-    // Far feature wall
+    // Far feature wall — start with a synchronous base canvas (artist
+    // name + period + decorative monogram), then upgrade with the real
+    // portrait as soon as it loads. Keeping a base means the wall never
+    // flashes a blank texture, even if portrait fetch is slow or fails.
+    const featBase = endWallBaseTexture(this.artist, this.periodName);
     const featMat = new THREE.MeshStandardMaterial({
-      map: endWallTexture(this.artist, this.periodName),
+      map: featBase,
       roughness: 0.6,
       metalness: 0.0,
     });
@@ -167,7 +172,12 @@ export class Gallery {
     feat.position.set(0, WALL_H / 2, this.halfL);
     feat.receiveShadow = true;
     this.scene.add(feat);
-    this._disposables.push(feat.geometry, featMat.map, featMat);
+    this._disposables.push(feat.geometry, featBase, featMat);
+
+    // Kick off the portrait fetch in parallel. The base texture is what
+    // the user sees for the first second or two — and is what they keep
+    // seeing if the image fails or no portrait was provided.
+    this._loadPortrait(featMat);
 
     // Baseboards and crown moulding
     const mouldMat = new THREE.MeshStandardMaterial({ color: 0x1a1814, roughness: 0.6, metalness: 0.2 });
@@ -292,7 +302,7 @@ export class Gallery {
       // will be swapped in on load. NOT transparent: a transparent material
       // with opacity:0 + map later means the material needs a program
       // recompile, which is easy to miss and ends up with invisible planes.
-      const canvasMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.85 });
+      const canvasMat = new THREE.MeshStandardMaterial({ color: 0x8a7a5e, roughness: 0.85 });
       const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), canvasMat);
       group.add(canvasMesh);
 
@@ -326,8 +336,7 @@ export class Gallery {
       const url = p.url || p.fullUrl;
       if (!url) {
         loaded++; report();
-        canvasMat.color.set(0x2a2a3a);
-        canvasMat.opacity = 1;
+        applyPlaceholderTexture(canvasMat, p, group, this._disposables);
         return;
       }
       // Each slot is "pending" until the texture resolves one way or the
@@ -339,8 +348,7 @@ export class Gallery {
         loaded++;
         report();
         if (!ok) {
-          canvasMat.color.set(0x2a2a3a);
-          canvasMat.opacity = 1;
+          applyPlaceholderTexture(canvasMat, p, group, this._disposables);
         }
       };
       loader.load(
@@ -363,8 +371,10 @@ export class Gallery {
         undefined,
         () => finish(false),
       );
-      // Safety: if the load is still pending after 12s, count as failed
-      setTimeout(() => finish(false), 12000);
+      // Safety: if the load is still pending after 25s, count as failed
+      // and show the artist monogram card. Some Wikimedia hi-res files
+      // legitimately take >12s to land on cold edge caches.
+      setTimeout(() => finish(false), 25000);
 
       // Always increment + report on success/error (texture callbacks)
       const tryReport = () => {
@@ -379,6 +389,50 @@ export class Gallery {
       // Add a safety report on next tick so the bar always moves:
       setTimeout(() => { if (!this.disposed) report(); }, 50);
     });
+  }
+
+  // ── PORTRAIT ON FEATURE WALL ─────────────────────────────────────────────
+  // The end wall first shows a base canvas (name + monogram + period) so
+  // the user never sees a blank texture. As soon as the remote portrait
+  // image loads, we re-draw the canvas with portrait on the left and
+  // artist name on the right, then swap the texture on the material.
+  // The `generation` counter mirrors the painting loader's pattern: a new
+  // gallery instance increments the counter so stale loads from a torn-
+  // down scene don't reach the GPU.
+  _loadPortrait(material) {
+    if (!this.artistPortrait) return;
+    const myGen = (this._portraitGen = (this._portraitGen || 0) + 1);
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = "anonymous";
+    const finish = () => {
+      // No-op on failure: the base canvas stays up.
+    };
+    loader.load(
+      this.artistPortrait,
+      (tex) => {
+        if (this._portraitGen !== myGen || this.disposed) {
+          tex.dispose();
+          return;
+        }
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 8;
+        // Re-draw the canvas with the portrait baked in, then free the
+        // raw texture — we want a single canvas texture on the wall
+        // (cheaper than two materials on one plane).
+        const portraitCanvas = drawPortraitIntoCanvas(this.artist, this.periodName, tex.image);
+        tex.dispose();
+        const newTex = new THREE.CanvasTexture(portraitCanvas);
+        newTex.colorSpace = THREE.SRGBColorSpace;
+        newTex.anisotropy = 8;
+        const old = material.map;
+        material.map = newTex;
+        material.needsUpdate = true;
+        this._disposables.push(newTex);
+        if (old) try { old.dispose(); } catch {}
+      },
+      undefined,
+      finish,
+    );
   }
 
   // ── LOOP / MOVEMENT ─────────────────────────────────────────────────────
@@ -511,6 +565,91 @@ export class Gallery {
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
+// When a painting's remote image fails to load, swap in a procedural
+// monogram card. Looks intentional, not "missing texture": a warm
+// sepia background with the artist's initial, the work's title (if
+// known), and a soft vignette — matches the museum's typographic
+// language. `pw`/`ph` are inferred from the material's plane geometry
+// so the card aspect matches the frame.
+function applyPlaceholderTexture(mat, painting, group, disposables) {
+  // Tear down any previous map the slot may have, so the placeholder
+  // doesn't get clobbered or leak GPU memory on a re-hang.
+  if (mat.map) {
+    try { mat.map.dispose(); } catch {}
+    mat.map = null;
+  }
+  mat.color.set(0xffffff);
+
+  const c = document.createElement("canvas");
+  c.width = 800; c.height = 1100;
+  const ctx = c.getContext("2d");
+
+  // Warm sepia background
+  const g = ctx.createLinearGradient(0, 0, 0, 1100);
+  g.addColorStop(0, "#2a221b");
+  g.addColorStop(1, "#1a1612");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 800, 1100);
+
+  // Vignette
+  const vg = ctx.createRadialGradient(400, 550, 100, 400, 550, 700);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, 800, 1100);
+
+  // Decorative gold border
+  ctx.strokeStyle = "#c8a45c";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(60, 60, 680, 980);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(80, 80, 640, 940);
+
+  // Initial — large gold serif
+  const initial = (painting.artist || painting.title || "?").trim().charAt(0).toUpperCase() || "?";
+  ctx.fillStyle = "#c8a45c";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "300 380px 'Cormorant Garamond', 'Times New Roman', serif";
+  ctx.fillText(initial, 400, 480);
+
+  // Title (if we have it)
+  if (painting.title) {
+    ctx.fillStyle = "#ece5d8";
+    ctx.font = "italic 36px 'Cormorant Garamond', 'Times New Roman', serif";
+    ctx.textBaseline = "top";
+    const title = String(painting.title);
+    const maxW = 560;
+    const words = title.split(/\s+/);
+    let line = "";
+    let yy = 800;
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line, 400, yy);
+        line = w;
+        yy += 46;
+        if (yy > 940) break;
+      } else {
+        line = test;
+      }
+    }
+    if (line && yy <= 940) ctx.fillText(line, 400, yy);
+  }
+
+  // "image unavailable" sub-line
+  ctx.fillStyle = "#8a7a5e";
+  ctx.font = "400 18px 'Inter', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("IMAGE UNAVAILABLE", 400, 980);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  mat.map = tex;
+  mat.needsUpdate = true;
+  disposables.push(tex);
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 //  PROCEDURAL TEXTURES (all drawn on <canvas>, sRGB-tagged at use site)
 // ─────────────────────────────────────────────────────────────────────────
@@ -619,7 +758,12 @@ function plaqueTexture(title, sub) {
   return tex;
 }
 
-function endWallTexture(artist, periodName) {
+// End-wall canvas (no portrait) — drawn synchronously at gallery
+// construction. The portrait swap that runs after the image loads
+// replaces this texture with a port+text composition. Keeping the
+// base separate means we never have to wait for a network roundtrip
+// before the wall has something to show.
+function endWallBaseTexture(artist, periodName) {
   const c = document.createElement("canvas");
   c.width = 1024; c.height = 1024;
   const ctx = c.getContext("2d");
@@ -628,23 +772,134 @@ function endWallTexture(artist, periodName) {
   g.addColorStop(0, "#0e0d0a");
   g.addColorStop(1, "#1a1815");
   ctx.fillStyle = g; ctx.fillRect(0, 0, 1024, 1024);
-  // gold rule
+
+  // Decorative gold monogram cartouche on the LEFT (where the portrait
+  // will eventually sit), so the layout doesn't visibly jump when the
+  // portrait swaps in.
+  drawMonogramCartouche(ctx, artist, 240, 512, 280);
+
+  // Decorative gold rule
   ctx.strokeStyle = "#c8a45c"; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(180, 540); ctx.lineTo(844, 540); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(540, 540); ctx.lineTo(940, 540); ctx.stroke();
+
   // artist name (large serif caps)
   ctx.fillStyle = "#c8a45c";
   ctx.textAlign = "center";
   ctx.font = "600 96px 'Cormorant Garamond', 'Times New Roman', serif";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText((artist || "").toUpperCase(), 512, 480);
+  ctx.fillText((artist || "").toUpperCase(), 740, 480);
   // period
   ctx.fillStyle = "#9b937f";
   ctx.font = "300 28px 'Inter', sans-serif";
-  ctx.fillText((periodName || "").toUpperCase(), 512, 600);
+  ctx.fillText((periodName || "").toUpperCase(), 740, 600);
+  // subtle "MUSÉE" eyebrow
+  ctx.fillStyle = "#6a604c";
+  ctx.font = "400 22px 'Inter', sans-serif";
+  ctx.fillText("— MUSÉE —", 740, 700);
+
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   return tex;
+}
+
+// Re-draw the end wall with a real portrait on the left + name on the
+// right. Called from _loadPortrait after the image resolves. `img` is
+// the loaded HTMLImageElement (tex.image).
+function drawPortraitIntoCanvas(artist, periodName, img) {
+  const c = document.createElement("canvas");
+  c.width = 1024; c.height = 1024;
+  const ctx = c.getContext("2d");
+
+  // dark base
+  const g = ctx.createLinearGradient(0, 0, 0, 1024);
+  g.addColorStop(0, "#0e0d0a");
+  g.addColorStop(1, "#1a1815");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 1024, 1024);
+
+  // Portrait frame area: x in [80, 460], y in [180, 760]
+  const fx = 80, fy = 180, fw = 380, fh = 580;
+  // Gold frame
+  ctx.fillStyle = "#c8a45c";
+  ctx.fillRect(fx - 12, fy - 12, fw + 24, fh + 24);
+  // Inner shadow
+  ctx.fillStyle = "#0a0908";
+  ctx.fillRect(fx - 4, fy - 4, fw + 8, fh + 8);
+
+  // Draw the portrait image, "object-fit: cover" into the frame box
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(fx, fy, fw, fh);
+  ctx.clip();
+  const iw = img.naturalWidth || img.width || fw;
+  const ih = img.naturalHeight || img.height || fh;
+  // Cover scale
+  const scale = Math.max(fw / iw, fh / ih);
+  const dw = iw * scale, dh = ih * scale;
+  const dx = fx + (fw - dw) / 2;
+  const dy = fy + (fh - dh) / 2;
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+
+  // Sepia tint over the portrait for a museum-print feel
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(fx, fy, fw, fh);
+  ctx.clip();
+  ctx.fillStyle = "rgba(120, 80, 40, 0.18)";
+  ctx.fillRect(fx, fy, fw, fh);
+  ctx.restore();
+
+  // Small caption beneath the frame
+  ctx.fillStyle = "#8a7a5e";
+  ctx.textAlign = "center";
+  ctx.font = "400 18px 'Inter', sans-serif";
+  ctx.fillText("PORTRAIT", fx + fw / 2, fy + fh + 36);
+
+  // Decorative gold rule on the right
+  ctx.strokeStyle = "#c8a45c"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(540, 540); ctx.lineTo(940, 540); ctx.stroke();
+
+  // artist name (large serif caps)
+  ctx.fillStyle = "#c8a45c";
+  ctx.textAlign = "center";
+  ctx.font = "600 96px 'Cormorant Garamond', 'Times New Roman', serif";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText((artist || "").toUpperCase(), 740, 480);
+  // period
+  ctx.fillStyle = "#9b937f";
+  ctx.font = "300 28px 'Inter', sans-serif";
+  ctx.fillText((periodName || "").toUpperCase(), 740, 600);
+  // eyebrow
+  ctx.fillStyle = "#6a604c";
+  ctx.font = "400 22px 'Inter', sans-serif";
+  ctx.fillText("— MUSÉE —", 740, 700);
+
+  return c;
+}
+
+// Decorative monogram cartouche — shown in the base end-wall canvas
+// before the portrait arrives. Keeps the left side from being empty.
+function drawMonogramCartouche(ctx, artist, cx, cy, r) {
+  const initial = (artist || "?").trim().charAt(0).toUpperCase() || "?";
+  // Outer gold ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = "#c8a45c";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // Inner thin ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 14, 0, Math.PI * 2);
+  ctx.strokeStyle = "#6a604c";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // The initial
+  ctx.fillStyle = "#c8a45c";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "300 220px 'Cormorant Garamond', 'Times New Roman', serif";
+  ctx.fillText(initial, cx, cy + 10);
 }
 
 function wrapText(ctx, text, x, y, maxW, lineH, maxLines) {

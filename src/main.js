@@ -207,6 +207,7 @@ function enterGallery(artist, period) {
         paintings,
         artist: artist.name,
         periodName: period?.name || "",
+        artistPortrait: artist.thumbnail || null,
         onProgress: (loaded, total) => {
           if (this.disposed) return;
           prog.textContent = `${loaded} / ${total}`;
