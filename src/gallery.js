@@ -54,7 +54,12 @@ export class Gallery {
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0908);
-    scene.fog = new THREE.Fog(0x0a0908, 14, this.hallLen * 0.85);
+    // Fog must reach (and just past) the far end wall, otherwise the
+    // feature wall blends into the scene background and reads as "empty".
+    // hallLen is perWall * SPACING + 8 — the +4 buffer keeps the end
+    // wall texture readable while still giving the rest of the hall a
+    // soft falloff.
+    scene.fog = new THREE.Fog(0x0a0908, this.hallLen * 0.55, this.hallLen + 6);
     this.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(FOV, this.container.clientWidth / this.container.clientHeight, 0.1, 200);
@@ -767,10 +772,12 @@ function endWallBaseTexture(artist, periodName) {
   const c = document.createElement("canvas");
   c.width = 1024; c.height = 1024;
   const ctx = c.getContext("2d");
-  // dark base
+  // Warmer base so the wall doesn't read as "background leak" when fog
+  // blends it into the scene. The previous near-black (0x0a0908) matched
+  // the scene clear color too closely, so the wall read as empty space.
   const g = ctx.createLinearGradient(0, 0, 0, 1024);
-  g.addColorStop(0, "#0e0d0a");
-  g.addColorStop(1, "#1a1815");
+  g.addColorStop(0, "#1c1814");
+  g.addColorStop(1, "#2a241c");
   ctx.fillStyle = g; ctx.fillRect(0, 0, 1024, 1024);
 
   // Decorative gold monogram cartouche on the LEFT (where the portrait
@@ -811,10 +818,10 @@ function drawPortraitIntoCanvas(artist, periodName, img) {
   c.width = 1024; c.height = 1024;
   const ctx = c.getContext("2d");
 
-  // dark base
+  // Warmer base — see endWallBaseTexture for the why.
   const g = ctx.createLinearGradient(0, 0, 0, 1024);
-  g.addColorStop(0, "#0e0d0a");
-  g.addColorStop(1, "#1a1815");
+  g.addColorStop(0, "#1c1814");
+  g.addColorStop(1, "#2a241c");
   ctx.fillStyle = g; ctx.fillRect(0, 0, 1024, 1024);
 
   // Portrait frame area: x in [80, 460], y in [180, 760]

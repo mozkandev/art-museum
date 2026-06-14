@@ -149,11 +149,26 @@ $("#placard-backdrop").addEventListener("click", (e) => {
 let gallery = null;
 let currentArtist = null;
 let currentPeriod = null;
+// Lightweight handle that callbacks fired during gallery construction
+// (texture loaders, intro timeline) can use to check whether the user
+// has already backed out. Reset on every enterGallery, set to disposed
+// on backToTimeline.
+let currentGalleryRef = null;
 
 function enterGallery(artist, period) {
   closePlacard();
   currentArtist = artist;
   currentPeriod = period;
+
+  // If a previous gallery run is still finishing up (intro animation,
+  // outstanding texture loads), mark it disposed so its late callbacks
+  // don't reach a stale DOM. Then dispose the previous WebGL scene.
+  if (currentGalleryRef) currentGalleryRef.disposed = true;
+  currentGalleryRef = null;
+  if (gallery) {
+    gallery.dispose();
+    gallery = null;
+  }
 
   // Kick off the procedural ambient music. The click that opened the
   // placard satisfied the browser's autoplay gesture requirement, so
@@ -202,6 +217,12 @@ function enterGallery(artist, period) {
       prog.textContent = `0 / ${paintings.length}`;
       $("#gallery-hud-count").textContent = `${paintings.length} works`;
 
+      // Module-level `currentGallery` so callbacks inside the gallery
+      // construction (onProgress, intro().then) can see a stable ref
+      // and bail out if the user already backed out to the timeline.
+      const myGallery = { disposed: false };
+      currentGalleryRef = myGallery;
+
       gallery = new Gallery({
         container: $("#gallery-canvas"),
         paintings,
@@ -209,7 +230,7 @@ function enterGallery(artist, period) {
         periodName: period?.name || "",
         artistPortrait: artist.thumbnail || null,
         onProgress: (loaded, total) => {
-          if (this.disposed) return;
+          if (myGallery.disposed) return;
           prog.textContent = `${loaded} / ${total}`;
           if (!revealed && loaded >= Math.min(4, total)) revealGallery();
         },
@@ -217,7 +238,7 @@ function enterGallery(artist, period) {
 
       // Cinematic intro, then show the lock overlay
       gallery.intro().then(() => {
-        if (this.disposed) return;
+        if (myGallery.disposed) return;
         if (!revealed) revealGallery();
       });
 
@@ -251,6 +272,8 @@ function lockIn() {
 function backToTimeline() {
   // Fade out the gallery music before tearing down the scene.
   Audio.stop();
+  if (currentGalleryRef) currentGalleryRef.disposed = true;
+  currentGalleryRef = null;
   if (gallery) {
     gallery.dispose();
     gallery = null;
