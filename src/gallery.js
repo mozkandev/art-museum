@@ -175,6 +175,12 @@ export class Gallery {
     });
     const feat = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, WALL_H), featMat);
     feat.position.set(0, WALL_H / 2, this.halfL);
+    // PlaneGeometry's default normal points to +Z. The camera is at
+    // -halfL, looking +Z toward this wall, so we need to flip the wall
+    // 180° around Y to face the camera. Without this, FrontSide
+    // materials show their back face (which is culled) and the wall
+    // reads as the scene background — the "black wall" bug.
+    feat.rotation.y = Math.PI;
     feat.receiveShadow = true;
     this.scene.add(feat);
     this._disposables.push(feat.geometry, featBase, featMat);
