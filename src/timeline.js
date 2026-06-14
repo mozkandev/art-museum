@@ -68,11 +68,20 @@ export class Timeline {
     // append so we can measure each card's actual height and place
     // "above" cards so their bottom edge sits on the axis.
     this.cards = [];
+    let nextLeft = -Infinity;
+    const COL_GAP = 24;
     PERIODS.forEach((p, i) => {
       const side = i % 2 === 0 ? -1 : 1; // -1 = above, +1 = below
-      const card = this._buildCard(p, i, side);
+      const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
+      const x = yearToX(p.start);
+      // Clamp left edge so this card never collides with the previous
+      // one. rightPad is an optional per-period right-margin that lets
+      // dense stretches (e.g. 1800-1900) opt into a wider gap.
+      const left = Math.max(x, nextLeft);
+      const card = this._buildCard(p, i, side, left, w);
       this.world.appendChild(card);
-      this.cards.push({ el: card, period: p, side });
+      this.cards.push({ el: card, period: p, side, left, width: w });
+      nextLeft = left + w + COL_GAP + (p.rightPad || 0);
     });
     // Lay out vertically now that heights are measurable.
     this._relayoutCards();
@@ -85,22 +94,22 @@ export class Timeline {
   // Place cards in their final vertical positions. Cards on the "above"
   // side get their bottom edge aligned to the axis (with a small gap
   // so the connector tick reads). Cards on the "below" side keep the
-  // 10px gap below the axis. The horizontal x was set in _buildCard
-  // and isn't touched here.
+  // 10px gap below the axis. The horizontal x was already set in
+  // _buildCard from the clamped 'left' (no-overlap), so we preserve it
+  // and only re-set it if the period has a 'rightPad' that affected
+  // the right edge — which is irrelevant to this pass.
   _relayoutCards() {
     for (const c of this.cards) {
       const h = c.el.offsetHeight || CARD_H;
-      const x = yearToX(c.period.start);
       const y = c.side === 1
         ? 10                            // below the axis
         : -(h + 20);                    // above the axis, bottom edge at y=-20
-      c.el.style.transform = `translate(${x}px, ${y}px)`;
+      c.el.style.transform = `translate(${c.left}px, ${y}px)`;
     }
   }
 
-  _buildCard(p, i, side) {
-    const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
-    const x = yearToX(p.start);
+  _buildCard(p, i, side, left, w) {
+    const x = left;          // already clamped against the previous card
     // Y is set later by _relayoutCards() so we can measure heights
     // and place "above" cards so their bottom edge sits on the axis.
     const y = side === 1 ? 10 : 0; // placeholder; relayout fixes this

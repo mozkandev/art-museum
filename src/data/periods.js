@@ -68,6 +68,7 @@ export const PERIODS = [
     color: "#5a4a3a",
     blurb: "Stonebreakers and bathers — the canvas leaves the salon for the field.",
     artists: ["Gustave Courbet", "Jean-François Millet", "Édouard Manet", "Ilya Repin"],
+    rightPad: 120, // extra gap to the right — 1800-1900 stretch is crowded
   },
   {
     id: "impressionism",
@@ -77,6 +78,7 @@ export const PERIODS = [
     color: "#6a8a9a",
     blurb: "Light breaks into colour, and painting leaves the studio for the riverside.",
     artists: ["Claude Monet", "Pierre-Auguste Renoir", "Edgar Degas", "Camille Pissarro", "Mary Cassatt"],
+    rightPad: 120,
   },
   {
     id: "post-impressionism",
