@@ -5,11 +5,13 @@
 import { gsap } from "gsap";
 import { PERIODS, TIMELINE_MIN_YEAR, TIMELINE_MAX_YEAR } from "./data/periods.js";
 
-const PX_PER_YEAR = 4.8;     // wider spacing so fixed-width cards don't collide
-const CARD_W = 280;          // fixed column width — uniform grid of stacks
+const PX_PER_YEAR = 3.2;
+const CARD_MIN = 220;
+const CARD_PAD = 24;
 const TICK_EVERY = 50;
 const TICK_LABEL_EVERY = 100;
 const AXIS_Y = 0; // logical y of the axis in the world
+const CARD_H = 168;
 const REVEAL_SCALE = 0.8;
 const CLICK_THRESHOLD = 6;
 
@@ -36,11 +38,6 @@ export class Timeline {
   _build() {
     this.world.innerHTML = "";
 
-    // Rails (the period-coloured tracks along the axis) sit on the
-    // world directly, NOT inside their card — that way they don't move
-    // with the card and the visual link to the axis is exact.
-    this.rails = [];
-
     // Axis
     this.axisEl = document.createElement("div");
     this.axisEl.className = "tl-axis";
@@ -66,33 +63,12 @@ export class Timeline {
     rule.className = "tl-axis__rule";
     this.axisEl.appendChild(rule);
 
-    // Period columns — laid out left-to-right with no overlap. Each
-    // card's left edge is max(year-centre - card_w/2, prev_card_right
-    // + gap). That pushes closely-spaced periods to the right of their
-    // year-centre so they never collide.
+    // Period cards
     this.cards = [];
-    let nextLeft = -Infinity;
-    const COL_GAP = 24;
     PERIODS.forEach((p, i) => {
-      // Rail spans the actual year range (true width, no overlap fix)
-      const railX = yearToX(p.start);
-      const railW = (p.end - p.start) * PX_PER_YEAR;
-      const rail = document.createElement("div");
-      rail.className = "tl-rail";
-      rail.style.setProperty("--pc", p.color);
-      rail.style.left = `${railX}px`;
-      rail.style.width = `${railW}px`;
-      this.world.appendChild(rail);
-      this.rails.push(rail);
-
-      // Card: anchor to year-centre, then push right to avoid overlap
-      const cx = yearToX((p.start + p.end) / 2);
-      const idealLeft = cx - CARD_W / 2;
-      const left = Math.max(idealLeft, nextLeft);
-      const card = this._buildCard(p, i, left);
+      const card = this._buildCard(p, i);
       this.world.appendChild(card);
-      this.cards.push({ el: card, period: p, left, side: i % 2 === 0 ? -1 : 1 });
-      nextLeft = left + CARD_W + COL_GAP;
+      this.cards.push({ el: card, period: p, side: i % 2 === 0 ? -1 : 1 });
     });
 
     // resize observer for re-fitting
@@ -100,35 +76,36 @@ export class Timeline {
     this._ro.observe(this.viewport);
   }
 
-  _buildCard(p, i, left) {
-    // Each period is a fixed-width column. We position the column by
-    // its year-centre but clamp it against the previous card's right
-    // edge to prevent overlap (see _build's lay-out pass).
-    const w = CARD_W;
-    const y = 18; // 18px gap below the axis
+  _buildCard(p, i) {
+    const w = Math.max(CARD_MIN, (p.end - p.start) * PX_PER_YEAR + CARD_PAD);
+    const x = yearToX(p.start);
+    const side = i % 2 === 0 ? -1 : 1;
+    // Always anchor cards BELOW the axis (positive Y in world space, so
+    // they sit in the lower half of the viewport). Cards used to be split
+    // above/below which made the upper half look empty and crowded the top.
+    // 10px breathing room between the axis line and the card top.
+    const y = 10;
 
     const card = document.createElement("article");
     card.className = "tl-card";
     card.style.setProperty("--pc", p.color);
     card.style.width = `${w}px`;
-    card.style.transform = `translate(${left}px, ${y}px)`;
+    card.style.transform = `translate(${x}px, ${y}px)`;
     card.dataset.periodId = p.id;
 
     card.innerHTML = `
-      <div class="tl-card__head">
-        <button class="tl-card__title-btn" data-period="${p.id}" type="button">
-          <div class="tl-card__years">${p.start}–${p.end}</div>
-          <h3 class="tl-card__name">${escapeHtml(p.name)}</h3>
-        </button>
-        <p class="tl-card__blurb">${escapeHtml(p.blurb)}</p>
-      </div>
-      <div class="tl-card__artists">
+      <button class="tl-card__head" data-period="${p.id}" type="button">
+        <div class="tl-card__years">${p.start}–${p.end}</div>
+        <h3 class="tl-card__name">${p.name}</h3>
+        <p class="tl-card__blurb">${p.blurb}</p>
+      </button>
+      <div class="tl-card__chips">
         ${p.artists
           .map(
             (a) => `
-          <button class="tl-artist" data-artist="${escapeAttr(a)}" data-period="${p.id}" type="button">
-            <span class="tl-artist__num" aria-hidden="true"></span>
-            <span class="tl-artist__name">${escapeHtml(a)}</span>
+          <button class="tl-chip" data-artist="${escapeAttr(a)}" data-period="${p.id}" type="button">
+            <span class="tl-chip__dot" aria-hidden="true"></span>
+            <span class="tl-chip__name">${escapeHtml(a)}</span>
           </button>`,
           )
           .join("")}
@@ -196,7 +173,7 @@ export class Timeline {
     // Click delegation: artist chip → openPlacard
     this.world.addEventListener("click", (e) => {
       if (moved > CLICK_THRESHOLD) return; // it was a drag
-      const chip = e.target.closest(".tl-artist");
+      const chip = e.target.closest(".tl-chip");
       if (chip) {
         e.stopPropagation();
         const name = chip.dataset.artist;
@@ -205,7 +182,7 @@ export class Timeline {
         this.onArtistClick?.(name, period);
         return;
       }
-      const head = e.target.closest(".tl-card__title-btn");
+      const head = e.target.closest(".tl-card__head");
       if (head) {
         const periodId = head.dataset.period;
         const period = PERIODS.find((p) => p.id === periodId);
@@ -294,14 +271,11 @@ export class Timeline {
 
   zoomToPeriod(period) {
     const w = this.viewport.clientWidth;
-    // Use the actual laid-out card position (which respects the
-    // no-overlap clamp) rather than a recomputed centre. Falls back
-    // to year-centre if the card isn't found.
-    const card = this.cards.find((c) => c.period.id === period.id);
-    const cardLeft = card ? card.left : yearToX((period.start + period.end) / 2) - CARD_W / 2;
-    const s = clamp(w / (w + 100), 0.6, 1.2);
+    const cx = yearToX((period.start + period.end) / 2) * 1.2 + (period.end - period.start) * 0; // year center
+    const cw = (period.end - period.start) * PX_PER_YEAR;
+    const s = clamp(Math.min((w * 0.6) / cw, 3), 0.6, 3);
     this.target.s = s;
-    this.target.x = w / 2 - (cardLeft + CARD_W / 2) * s;
+    this.target.x = w / 2 - cx * s;
     this.target.y = -this.viewportH() / 2;
   }
 }

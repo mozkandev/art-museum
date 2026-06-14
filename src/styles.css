@@ -162,47 +162,35 @@ button { font-family: inherit; cursor: pointer; }
 }
 .tl-tick:not(.tl-tick--label) { /* years labeled via textContent */ }
 
-/* ── TIMELINE ─────────────────────────────────────────────────────────────
- * Layout: each period is a fixed-width column anchored on the timeline
- * by its year-centre. The card stacks: head (years + name + blurb) on
- * top, then a vertical list of artists, one per row. A thin coloured
- * "rail" under the card visually links the column to its span on the
- * axis so the user can read the time-weight of each period.
- */
 .tl-card {
   position: absolute;
-  background: linear-gradient(180deg, rgba(20,18,14,0.96) 0%, rgba(12,11,9,0.96) 100%);
+  background: linear-gradient(180deg, rgba(20,18,14,0.95) 0%, rgba(12,11,9,0.95) 100%);
   border: 1px solid var(--line);
-  border-top: 2px solid var(--pc, var(--gold));
-  padding: 18px 20px 16px;
-  display: flex; flex-direction: column; gap: 14px;
+  border-left: 3px solid var(--pc, var(--gold));
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 10px;
   will-change: transform;
-  box-shadow: 0 10px 36px rgba(0,0,0,0.55);
-  /* accent stripe that bleeds down the left side of the card */
-  box-shadow: 0 10px 36px rgba(0,0,0,0.55), inset 2px 0 0 var(--pc, var(--gold));
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
-.tl-card__head { display: flex; flex-direction: column; gap: 6px; }
-.tl-card__title-btn {
+.tl-card__head {
   text-align: left;
-  background: none; border: 0; padding: 0; margin: 0;
+  background: none; border: 0; padding: 0;
   color: var(--ink);
   display: flex; flex-direction: column; gap: 4px;
-  cursor: pointer;
-  font: inherit;
 }
-.tl-card__title-btn:hover .tl-card__name { color: var(--pc, var(--gold)); }
+.tl-card__head:hover .tl-card__name { color: var(--pc, var(--gold)); }
 .tl-card__years {
   font-size: 10px; letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: var(--pc, var(--gold));
+  color: var(--gold);
   font-family: var(--sans);
   font-variant-numeric: tabular-nums;
 }
 .tl-card__name {
   font-family: var(--serif);
-  font-size: 22px; font-weight: 500;
+  font-size: 24px; font-weight: 500;
   margin: 0;
-  line-height: 1.12;
+  line-height: 1.1;
   color: var(--ink);
   transition: color 0.3s ease;
 }
@@ -210,59 +198,32 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 12px; line-height: 1.5;
   color: var(--ink-dim);
   margin: 0;
+  max-width: 32ch;
 }
-
-/* Rail — a thin coloured track that runs along the axis, spanning
- * exactly the period's year range. Sits on the world (not the card)
- * so it scales with the timeline's transform and the card can move
- * independently above it. Renders ON TOP of the axis rule, replacing
- * the gold at the period's span with that period's accent colour.
- */
-.tl-rail {
-  position: absolute;
-  top: -2px;          /* axis rule is at top:0 with height:1px */
-  height: 5px;
-  background: var(--pc, var(--gold));
-  opacity: 0.75;
-  pointer-events: none;
-  border-radius: 1px;
-}
-
-.tl-card__artists {
-  display: flex; flex-direction: column; gap: 0;
-  border-top: 1px solid var(--line);
-  margin: 0 -20px -16px;       /* bleed to card edges */
-  padding: 0;
-  opacity: 1;                  /* always visible (no longer gated on zoom) */
+.tl-card__chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 4px;
+  opacity: 0;
   transition: opacity 0.4s ease;
 }
-.tl-artist {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 9px 20px;
-  background: none; border: 0;
+.timeline__world.zoomed .tl-card__chips { opacity: 1; }
+.tl-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--line);
   color: var(--ink);
-  font-size: 13px; letter-spacing: 0.01em;
+  font-size: 11px; letter-spacing: 0.04em;
   font-family: var(--sans);
-  text-align: left;
-  cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  transition: background 0.18s ease, color 0.18s ease, padding-left 0.18s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
-.tl-artist:last-child { border-bottom: 0; }
-.tl-artist:hover {
-  background: rgba(255,255,255,0.04);
-  color: var(--pc, var(--gold));
-  padding-left: 24px;
-}
-.tl-artist__num {
-  /* tiny index dot so the list reads as a numbered index, not a wall */
-  width: 4px; height: 4px; border-radius: 50%;
+.tl-chip:hover { background: var(--pc, var(--gold)); color: var(--bg); border-color: var(--pc, var(--gold)); }
+.tl-chip__dot {
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--pc, var(--gold));
   flex-shrink: 0;
-  opacity: 0.6;
-  position: relative; top: -2px;
 }
-.tl-artist:hover .tl-artist__num { opacity: 1; }
+.tl-chip:hover .tl-chip__dot { background: var(--bg); }
 
 /* ── PLACARD ───────────────────────────────────────────────────────────── */
 .placard-backdrop {
